@@ -25,7 +25,7 @@ function App() {
                 if (!countRes.ok) throw new Error(`HTTP error! status: ${countRes.status}`);
                 const countData = await countRes.json();
                 const total = countData.total || (countData.data ? countData.data.length : 0);
-                const offset = total > limit ? total - limit : 18;
+                const offset = total > limit ? total - limit : 17;
 
                 // Schritt 2: Die letzten 10 Events holen
                 const res = await fetch(
@@ -158,18 +158,26 @@ function App() {
         const missing = ids.filter((pid) => !personNames[pid]);
         if (missing.length) {
             setLoadingPersons((prev) => ({ ...prev, [`${decisionId}_${type}`]: true }));
-            // Hole Namen für alle fehlenden Personen parallel
+            // Hole Namen und Bild für alle fehlenden Personen parallel
             const results = await Promise.all(
-                missing.map((pid) =>
-                    fetch(`/api/${pid}`)
+                missing.map((pid) => {
+                    const mepId = pid.split("/").pop();
+                    return fetch(`/api/meps/${mepId}`)
                         .then((r) => (r.ok ? r.json() : null))
-                        .then((data) => ({ pid, name: data?.fullName || data?.name || pid }))
-                        .catch(() => ({ pid, name: pid }))
-                )
+                        .then((data) => {
+                            const d = Array.isArray(data?.data) ? data.data[0] : data?.data || data;
+                            return {
+                                pid,
+                                name: d?.label || d?.fullName || d?.name || pid,
+                                img: d?.img,
+                            };
+                        })
+                        .catch(() => ({ pid, name: pid, img: null }));
+                })
             );
             const newNames = {};
-            results.forEach(({ pid, name }) => {
-                newNames[pid] = name;
+            results.forEach(({ pid, name, img }) => {
+                newNames[pid] = { name, img };
             });
             setPersonNames((prev) => ({ ...prev, ...newNames }));
             setLoadingPersons((prev) => ({ ...prev, [`${decisionId}_${type}`]: false }));
@@ -507,11 +515,44 @@ function App() {
                                                                                                         listStyle:
                                                                                                             "none",
                                                                                                         marginBottom: 4,
+                                                                                                        display:
+                                                                                                            "flex",
+                                                                                                        alignItems:
+                                                                                                            "center",
                                                                                                     }}
                                                                                                 >
                                                                                                     {personNames[
                                                                                                         pid
-                                                                                                    ] ||
+                                                                                                    ]
+                                                                                                        ?.img && (
+                                                                                                        <img
+                                                                                                            src={
+                                                                                                                personNames[
+                                                                                                                    pid
+                                                                                                                ]
+                                                                                                                    .img
+                                                                                                            }
+                                                                                                            alt={
+                                                                                                                personNames[
+                                                                                                                    pid
+                                                                                                                ]
+                                                                                                                    .name
+                                                                                                            }
+                                                                                                            style={{
+                                                                                                                width: 24,
+                                                                                                                height: 24,
+                                                                                                                borderRadius:
+                                                                                                                    "50%",
+                                                                                                                marginRight: 8,
+                                                                                                                objectFit:
+                                                                                                                    "cover",
+                                                                                                            }}
+                                                                                                        />
+                                                                                                    )}
+                                                                                                    {personNames[
+                                                                                                        pid
+                                                                                                    ]
+                                                                                                        ?.name ||
                                                                                                         pid}
                                                                                                 </li>
                                                                                             )
