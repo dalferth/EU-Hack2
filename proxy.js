@@ -11,8 +11,8 @@ app.use((req, res, next) => {
 // Health-Check
 app.get('/health', (req, res) => res.send('OK'));
 
-// Cache für 5 Minuten (300.000 ms)
-const CACHE_DURATION = 5 * 60 * 1000;
+// Cache für 2 Stunden (7.200.000 ms)
+const CACHE_DURATION = 2 * 60 * 60 * 1000;
 const cache = new Map();
 
 // Cache-Funktion
