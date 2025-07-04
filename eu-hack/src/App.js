@@ -15,30 +15,40 @@ function App() {
     const year = 2025;
     const limit = 10;
 
+    // Hilfsfunktion für sicheres JSON-Parsing
+    const safeJsonFetch = async (url, errorMessage) => {
+        try {
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error(errorMessage || `HTTP error! status: ${response.status}`);
+            }
+            
+            const contentType = response.headers.get("content-type");
+            if (!contentType || (!contentType.includes("application/json") && !contentType.includes("application/ld+json"))) {
+                const text = await response.text();
+                console.error("Non-JSON response:", text.substring(0, 200));
+                throw new Error("Response is not JSON");
+            }
+            
+            return await response.json();
+        } catch (error) {
+            console.error(`Error fetching ${url}:`, error);
+            throw error;
+        }
+    };
+
     useEffect(() => {
         const fetchMeetings = async () => {
             setLoading(true);
             setError(null);
             try {
                 // Schritt 1: Anzahl der Events für das Jahr holen
-                const countRes = await fetch(`/api/meetings?year=${year}&limit=1`);
-                if (!countRes.ok) throw new Error(`HTTP error! status: ${countRes.status}`);
-                const countData = await countRes.json();
+                const countData = await safeJsonFetch(`/api/meetings?year=${year}&limit=1`, "Fehler beim Laden der Event-Anzahl");
                 const total = countData.total || (countData.data ? countData.data.length : 0);
                 const offset = total > limit ? total - limit : 17;
 
                 // Schritt 2: Die letzten 10 Events holen
-                const res = await fetch(
-                    `/api/meetings?year=${year}&offset=${offset}&limit=${limit}`
-                );
-                if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-                const contentType = res.headers.get("content-type");
-                if (!contentType || !contentType.includes("application/json")) {
-                    const text = await res.text();
-                    console.error("Non-JSON response:", text.substring(0, 200));
-                    throw new Error("Response is not JSON");
-                }
-                const data = await res.json();
+                const data = await safeJsonFetch(`/api/meetings?year=${year}&offset=${offset}&limit=${limit}`, "Fehler beim Laden der Events");
                 setMeetings((data.data || data || []).reverse());
             } catch (e) {
                 console.error("Fetch error:", e);
@@ -106,30 +116,12 @@ function App() {
             // Basisdetails
             const [main, activities, decisions, foreseen, votes, meetingDecisions] =
                 await Promise.all([
-                    fetch(`/api/meetings/${id}`).then((r) => {
-                        if (!r.ok) throw new Error("Fehler beim Laden der Sitzungsdetails");
-                        return r.json();
-                    }),
-                    fetch(`/api/meetings/${id}/activities`).then((r) => {
-                        if (!r.ok) throw new Error("Fehler beim Laden der Aktivitäten");
-                        return r.json();
-                    }),
-                    fetch(`/api/meetings/${id}/decisions`).then((r) => {
-                        if (!r.ok) throw new Error("Fehler beim Laden der Entscheidungen");
-                        return r.json();
-                    }),
-                    fetch(`/api/meetings/${id}/foreseen-activities`).then((r) => {
-                        if (!r.ok) throw new Error("Fehler beim Laden der geplanten Aktivitäten");
-                        return r.json();
-                    }),
-                    fetch(`/api/meetings/${id}/vote-results`).then((r) => {
-                        if (!r.ok) throw new Error("Fehler beim Laden der Abstimmungsergebnisse");
-                        return r.json();
-                    }),
-                    fetch(`/api/meetings/${id}/decisions`).then((r) => {
-                        if (!r.ok) throw new Error("Fehler beim Laden der Entscheidungen");
-                        return r.json();
-                    }),
+                    safeJsonFetch(`/api/meetings/${id}`, "Fehler beim Laden der Sitzungsdetails"),
+                    safeJsonFetch(`/api/meetings/${id}/activities`, "Fehler beim Laden der Aktivitäten"),
+                    safeJsonFetch(`/api/meetings/${id}/decisions`, "Fehler beim Laden der Entscheidungen"),
+                    safeJsonFetch(`/api/meetings/${id}/foreseen-activities`, "Fehler beim Laden der geplanten Aktivitäten"),
+                    safeJsonFetch(`/api/meetings/${id}/vote-results`, "Fehler beim Laden der Abstimmungsergebnisse"),
+                    safeJsonFetch(`/api/meetings/${id}/decisions`, "Fehler beim Laden der Entscheidungen"),
                 ]);
             setDetails({ main, activities, decisions, foreseen, votes, meetingDecisions });
         } catch (e) {
@@ -166,19 +158,20 @@ function App() {
             setLoadingPersons((prev) => ({ ...prev, [`${decisionId}_${type}`]: true }));
             // Hole Namen und Bild für alle fehlenden Personen parallel
             const results = await Promise.all(
-                missing.map((pid) => {
+                missing.map(async (pid) => {
                     const mepId = pid.split("/").pop();
-                    return fetch(`/api/meps/${mepId}`)
-                        .then((r) => (r.ok ? r.json() : null))
-                        .then((data) => {
-                            const d = Array.isArray(data?.data) ? data.data[0] : data?.data || data;
-                            return {
-                                pid,
-                                name: d?.label || d?.fullName || d?.name || pid,
-                                img: d?.img,
-                            };
-                        })
-                        .catch(() => ({ pid, name: pid, img: null }));
+                    try {
+                        const data = await safeJsonFetch(`/api/meps/${mepId}`, "Fehler beim Laden der Personendaten");
+                        const d = Array.isArray(data?.data) ? data.data[0] : data?.data || data;
+                        return {
+                            pid,
+                            name: d?.label || d?.fullName || d?.name || pid,
+                            img: d?.img,
+                        };
+                    } catch (error) {
+                        console.error(`Error loading person ${mepId}:`, error);
+                        return { pid, name: pid, img: null };
+                    }
                 })
             );
             const newNames = {};
