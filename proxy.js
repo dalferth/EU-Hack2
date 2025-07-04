@@ -2,12 +2,15 @@ const express = require("express");
 const fetch = (...args) => import("node-fetch").then(({ default: fetch }) => fetch(...args));
 const app = express();
 
-app.get("/api/meetings", async (req, res) => {
+// Proxy für alle /api/meetings und Subrouten
+app.use("/api/meetings", async (req, res) => {
+    // baue Ziel-URL
+    const subPath = req.path === "/" ? "" : req.path;
     const params = new URLSearchParams(req.query);
     if (!params.has("format")) {
         params.set("format", "application/ld+json");
     }
-    const url = `https://data.europarl.europa.eu/api/v2/meetings?${params.toString()}`;
+    const url = `https://data.europarl.europa.eu/api/v2/meetings${subPath}?${params.toString()}`;
     try {
         const response = await fetch(url, {
             headers: { accept: "application/ld+json" },
