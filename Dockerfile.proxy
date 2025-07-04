@@ -1,0 +1,18 @@
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies
+RUN npm ci --only=production
+
+# Copy proxy source code
+COPY proxy.js ./
+
+# Expose port 4000
+EXPOSE 4000
+
+# Start the proxy server
+CMD ["node", "proxy.js"] 
