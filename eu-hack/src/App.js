@@ -51,7 +51,7 @@ function App() {
     }, []);
 
     const formatDate = (dateString) => {
-        if (!dateString) return "unbekannt";
+        if (!dateString) return "";
         try {
             const date = new Date(dateString);
             return date.toLocaleDateString("de-DE", {
@@ -66,15 +66,21 @@ function App() {
     };
 
     const getMeetingTitle = (meeting) => {
-        // Versuche deutsche Bezeichnung zu finden, sonst englische
         if (meeting.activity_label?.de) {
             return meeting.activity_label.de;
         }
         if (meeting.activity_label?.en) {
             return meeting.activity_label.en;
         }
-        // Fallback auf activity_id
-        return meeting.activity_id || "Meeting";
+        if (meeting.activity_label && Object.values(meeting.activity_label).length > 0) {
+            return Object.values(meeting.activity_label)[0];
+        }
+        // Fallback: Nur das formatierte Datum als Titel
+        const date =
+            meeting["eli-dl:activity_date"]?.["@value"] ||
+            meeting.activity_start_date ||
+            meeting.activity_date;
+        return date ? formatDate(date) : "";
     };
 
     const getMeetingLocation = (meeting) => {
@@ -290,10 +296,7 @@ function App() {
                                     <span style={{ fontSize: 32, marginRight: 16 }}>📄</span>
                                     <div>
                                         <div style={{ fontWeight: 700, fontSize: 22 }}>
-                                            {details.main.activity_label?.de ||
-                                                details.main.activity_label?.fr ||
-                                                details.main.activity_label?.en ||
-                                                details.main.activity_id}
+                                            {getMeetingTitle(details.main)}
                                         </div>
                                         <div
                                             style={{
@@ -303,17 +306,13 @@ function App() {
                                             }}
                                         >
                                             {formatDate(
-                                                details.main.activity_date ||
-                                                    details.main["eli-dl:activity_date"]?.[
-                                                        "@value"
-                                                    ] ||
-                                                    details.main.activity_start_date
+                                                details.main["eli-dl:activity_date"]?.["@value"] ||
+                                                    details.main.activity_start_date ||
+                                                    details.main.activity_date
                                             )}
                                         </div>
                                         <div style={{ fontSize: 14, color: "#666" }}>
-                                            {details.main.had_activity_type?.includes("VOTE")
-                                                ? "Abstimmung"
-                                                : "Sitzung"}
+                                            {getMeetingLocation(details.main)}
                                         </div>
                                     </div>
                                 </div>
